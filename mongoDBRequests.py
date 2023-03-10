@@ -1,13 +1,14 @@
 from dotenv import load_dotenv, find_dotenv
 import os
 import pprint
+import urllib.parse
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 load_dotenv(find_dotenv()) # Automatically find and load .env file
 
 # MongoDB Cluster connection definition for "Personal" cluster
 mongoDB_Personal_UserName = os.environ.get("MONGODB_USER")
-mongoDB_Personal_Password = os.environ.get("MONGODB_PWD")
+mongoDB_Personal_Password = urllib.parse.quote_plus(os.environ.get("MONGODB_PWD"))
 mongodb_Personal_ConnectionString = f"mongodb+srv://{mongoDB_Personal_UserName}:{mongoDB_Personal_Password}@personal.31iindg.mongodb.net/?retryWrites=true&w=majority"
 client = MongoClient(mongodb_Personal_ConnectionString)
 

@@ -1,23 +1,18 @@
+# The core of this application has functions that are meant to be called upon by various cron jobs and not publicly accessible via the public facing FastAPI due to database updates
+
+# Cron Job 1: Every 6 Hours call getOSRSMainPageNewsArticles() to retreive a current list of the news articles posted to the oldschool.runescape.com website's MAIN PAGE then update the Atlas MongoDB 'OSRSMainNewsArticles' table accordingly
+
+# Cron Job 2: Every 6 hours call get OSRSCurrentMonthArticles() to retreive a current list of the news articles posted to the oldschool.runescape.com website NEWS ARCHIVE then update the Atlas Mongo DB 'OSRSArchivedNewsArticles' table accordingly
+
 import requests
-import mongoTest
-import json
-import time
-import os
 from bs4 import BeautifulSoup
 from datetime import *
 from multiprocessing import *
 from pprint import pprint
-from dotenv import load_dotenv, find_dotenv
-from pymongo import MongoClient
-from bson.objectid import ObjectId
+import mongoDBRequests
+import json
+import time
 from dataclasses import dataclass
-
-load_dotenv(find_dotenv()) # Automatically find and load .env file
-# MongoDB Cluster connection definition for "Personal" cluster
-mongoDB_Personal_UserName = os.environ.get("MONGODB_USER")
-mongoDB_Personal_Password = os.environ.get("MONGODB_PWD")
-mongodb_Personal_ConnectionString = f"mongodb+srv://{mongoDB_Personal_UserName}:{mongoDB_Personal_Password}@personal.31iindg.mongodb.net/?retryWrites=true&w=majority"
-client = MongoClient(mongodb_Personal_ConnectionString)
 
 # DataClass that defines all notable elements of an OSRS News Article
 @dataclass
@@ -72,7 +67,37 @@ def getOSRSMainPageNewsArticles():
         # Append object to global list of all published news posts
         osrsMainNewsArticlesList.append(articleObj)
         
+    syncOSRSMainPageArticles(osrsMainNewsArticlesList)
+        
     return osrsMainNewsArticlesList
+
+# Function to drop any existing "mainPage" articles from Consolidate:OSRSNewsArticles mongoDB collection that are not present in the "live" results gathered from the getOsrsMainPageNewsArticles function
+def syncOSRSMainPageArticles(articleList):
+    storedArticles = mongoDBRequests.findOSRSNewsMainPageArticles("Consolidate", "OSRSMainNewsArticles") 
+    
+    # Check if any live articles need to be inserted (i.e. Not one of the stored articles)
+    for liveArticle in articleList:
+        insertFlag = True
+        for storedArticle in storedArticles:
+            if(liveArticle.articleTitle == storedArticle['articleTitle']):
+                insertFlag = False
+                print(f"{liveArticle.articleTitle} is already in [Consolidate:OSRSMainNewsArticles]")
+                break
+        if(insertFlag):
+            print(f"Inserting {liveArticle.articleTitle}")
+            mongoDBRequests.insertSingleRecord("Consolidate", "OSRSMainNewsArticles", liveArticle.__dict__)
+    
+    # Check if any stored articles need to be dropped (i.e Not one of the most recent live articles)
+    for storedArticle in storedArticles:
+        dropFlag = True
+        for liveArticle in articleList:
+            if(storedArticle['articleTitle'] == liveArticle.articleTitle):
+                dropFlag = False
+                print(f"{storedArticle['articleTitle']} is a live article")
+                break
+        if(dropFlag):
+            print(f"{storedArticle['articleTitle']} is stale. Dropping {storedArticle['articleTitle']}")       
+            mongoDBRequests.deleteSingleRecord("Consolidate", "OSRSMainNewsArticles", storedArticle['_id'])
 
 
 # Function to send a web request to grab all posted news articles on a specified Month/Year then format the results into useable objects placed into a List. Pageination is supported for up to 2 pages for any Month/Year that has more than 1 news page
@@ -120,53 +145,23 @@ def getOSRSArchivedNewsArticles(yearNumber, monthNumber, pageNumber = 1):
         paginatedArticles = getOSRSArchivedNewsArticles(yearNumber, monthNumber, pageNumber+1)
         for article in paginatedArticles:
             osrsArchivedNewsArticlesList.append(article)
-        
+    
     return osrsArchivedNewsArticlesList
     
-    
-# Function to drop any existing "mainPage" articles from Consolidate:OSRSNewsArticles mongoDB collection that are not present in the "live" results gathered from the getOsrsMainPageNewsArticles function
-def syncOSRSMainPageArticles(articleList):
-    storedArticles = mongoTest.findOSRSNewsMainPageArticles("Consolidate", "OSRSMainNewsArticles") 
-    
-    # Check if any live articles need to be inserted (i.e. Not one of the stored articles)
-    for liveArticle in articleList:
-        insertFlag = True
-        for storedArticle in storedArticles:
-            if(liveArticle.articleTitle == storedArticle['articleTitle']):
-                insertFlag = False
-                print(f"{liveArticle.articleTitle} is already in [Consolidate:OSRSMainNewsArticles]")
-                break
-        if(insertFlag):
-            print(f"Inserting {liveArticle.articleTitle}")
-            mongoTest.insertSingleRecord("Consolidate", "OSRSMainNewsArticles", liveArticle.__dict__)
-    
-    # Check if any stored articles need to be dropped (i.e Not one of the most recent live articles)
-    for storedArticle in storedArticles:
-        dropFlag = True
-        for liveArticle in articleList:
-            if(storedArticle['articleTitle'] == liveArticle.articleTitle):
-                dropFlag = False
-                print(f"{storedArticle['articleTitle']} is a live article")
-                break
-        if(dropFlag):
-            print(f"{storedArticle['articleTitle']} is stale. Dropping {storedArticle['articleTitle']}")       
-            mongoTest.deleteSingleRecord("Consolidate", "OSRSMainNewsArticles", storedArticle['_id'])
     
 # Function to get any newly posted OSRS news articles for the current month then insert any new articles in the Consolidate OSRSArchivedNewsArticles mongoDB
 def getOSRSCurrentMonthArticles(currentYear, currentMonth):
     
     newestOSRSArticles = getOSRSArchivedNewsArticles(currentYear, currentMonth)
-    osrsCurrentMonthArticles = mongoTest.findOSRSSpecificMonthArticles("Consolidate", "OSRSArchivedNewsArticles", currentMonth, currentYear) 
+    osrsCurrentMonthArticles = mongoDBRequests.findOSRSSpecificMonthArticles("Consolidate", "OSRSArchivedNewsArticles", currentMonth, currentYear) 
     
     for liveArticle in newestOSRSArticles:
         if(any(article['articleTitle'] == liveArticle.articleTitle for article in osrsCurrentMonthArticles)):
             print(f"{liveArticle.articleTitle} already exists in [Consolidate:OSRSArchivedNewsArticles]")
         else:
             print(f"Inserting {liveArticle.articleTitle} in [Consolidate:OSRSArchivedNewsArticles]")
-            mongoTest.insertSingleRecord("Consolidate", "OSRSArchivedNewsArticles", liveArticle.__dict__)
+            mongoDBRequests.insertSingleRecord("Consolidate", "OSRSArchivedNewsArticles", liveArticle.__dict__)
             
-            
-# def getOSRSSpecificMonthArticles(specificYear, specificMonth):
     
 # Global declarations (declared in each process)
 today = date.today()
@@ -176,8 +171,8 @@ currentMonth = date.today().month
 # Grab all news articles from the OSRS website published from the past 2 years
 if __name__ == '__main__':
     print("Grabbing main page articles...")
-    mainPageArticles = getOSRSMainPageNewsArticles()
-    syncOSRSMainPageArticles(mainPageArticles)
+    #mainPageArticles = getOSRSMainPageNewsArticles()
+    # syncOSRSMainPageArticles(mainPageArticles)
     getOSRSCurrentMonthArticles(currentYear, currentMonth)
     #getOSRSSpecificMonthArticles(currentYear, currentMonth)
     
