@@ -1,6 +1,6 @@
 # The core of this application has functions that are meant to be called upon by various cron jobs and not publicly accessible via the public facing FastAPI due to database updates
 
-# Cron Job 1: Every 6 Hours call getOSRSMainPageNewsArticles() to retreive a current list of the news articles posted to the oldschool.runescape.com website's MAIN PAGE then update the Atlas MongoDB 'OSRSMainNewsArticles' table accordingly
+# Cron Job 1: Every 6 Hours call scrapeOSRSMainPageNewsArticles() to retreive a current list of the news articles posted to the oldschool.runescape.com website's MAIN PAGE then update the Atlas MongoDB 'OSRSMainNewsArticles' table accordingly
 
 # Cron Job 2: Every 6 hours call get OSRSCurrentMonthArticles() to retreive a current list of the news articles posted to the oldschool.runescape.com website NEWS ARCHIVE then update the Atlas Mongo DB 'OSRSArchivedNewsArticles' table accordingly
 
@@ -29,7 +29,7 @@ class osrsNewsArticle:
 
 
 # Function to send a web request to grab all posted news articles on the OSRS Main Page then format the results into useable objects placed into a  List
-def getOSRSMainPageNewsArticles():
+def scrapeOSRSMainPageNewsArticles():
     osrsMainNewsArticlesList = []
     
     # Send the web request for a specific month & year page
@@ -71,9 +71,9 @@ def getOSRSMainPageNewsArticles():
         
     return osrsMainNewsArticlesList
 
-# Function to drop any existing "mainPage" articles from Consolidate:OSRSNewsArticles mongoDB collection that are not present in the "live" results gathered from the getOsrsMainPageNewsArticles function
+# Function to drop any existing "mainPage" articles from Consolidate:OSRSNewsArticles mongoDB collection that are not present in the "live" results gathered from the scrapeOSRSMainPageNewsArticles function
 def syncOSRSMainPageArticles(articleList):
-    storedArticles = mongoDBRequests.findOSRSNewsMainPageArticles("Consolidate", "OSRSMainNewsArticles") 
+    storedArticles = mongoDBRequests.readOSRSNewsMainPageArticles("Consolidate", "OSRSMainNewsArticles") 
     
     # Check if any live articles need to be inserted (i.e. Not one of the stored articles)
     for liveArticle in articleList:
@@ -101,7 +101,7 @@ def syncOSRSMainPageArticles(articleList):
 
 
 # Function to send a web request to grab all posted news articles on a specified Month/Year then format the results into useable objects placed into a List. Pageination is supported for up to 2 pages for any Month/Year that has more than 1 news page
-def getOSRSArchivedNewsArticles(yearNumber, monthNumber, pageNumber = 1):
+def scrapeOSRSArchivedNewsArticles(monthNumber, yearNumber, pageNumber = 1):
     osrsArchivedNewsArticlesList = []
     
     # Send the web request for a specific month & year page
@@ -142,18 +142,18 @@ def getOSRSArchivedNewsArticles(yearNumber, monthNumber, pageNumber = 1):
     
     paginationElement = soupNewsSection.find("a", class_="news-archive-next")
     if((paginationElement != None ) and (paginationElement.text == "Next")):
-        paginatedArticles = getOSRSArchivedNewsArticles(yearNumber, monthNumber, pageNumber+1)
+        paginatedArticles = scrapeOSRSArchivedNewsArticles(yearNumber, monthNumber, pageNumber+1)
         for article in paginatedArticles:
             osrsArchivedNewsArticlesList.append(article)
     
     return osrsArchivedNewsArticlesList
     
     
-# Function to get any newly posted OSRS news articles for the current month then insert any new articles in the Consolidate OSRSArchivedNewsArticles mongoDB
-def getOSRSCurrentMonthArticles(currentYear, currentMonth):
+# Function to scrape the OSRS News website for any newly posted OSRS news articles for the current month then insert any new articles in the Consolidate OSRSArchivedNewsArticles mongoDB
+def scrapeOSRSCurrentMonthArticles(currentMonth, currentYear):
     
-    newestOSRSArticles = getOSRSArchivedNewsArticles(currentYear, currentMonth)
-    osrsCurrentMonthArticles = mongoDBRequests.findOSRSSpecificMonthArticles("Consolidate", "OSRSArchivedNewsArticles", currentMonth, currentYear) 
+    newestOSRSArticles = scrapeOSRSArchivedNewsArticles(currentMonth, currentYear)
+    osrsCurrentMonthArticles = mongoDBRequests.readOSRSSpecificMonthArticles("Consolidate", "OSRSArchivedNewsArticles", currentMonth, currentYear) 
     
     for liveArticle in newestOSRSArticles:
         if(any(article['articleTitle'] == liveArticle.articleTitle for article in osrsCurrentMonthArticles)):
@@ -161,7 +161,17 @@ def getOSRSCurrentMonthArticles(currentYear, currentMonth):
         else:
             print(f"Inserting {liveArticle.articleTitle} in [Consolidate:OSRSArchivedNewsArticles]")
             mongoDBRequests.insertSingleRecord("Consolidate", "OSRSArchivedNewsArticles", liveArticle.__dict__)
+   
             
+# Function to query the OSRSMainNewsArticles MongoDB collection for all 5 live articles
+def getOSRSMainPageArticles():
+    mainArticles = mongoDBRequests.readOSRSNewsMainPageArticles("Consolidate", "OSRSMainNewsArticles") 
+    return mainArticles
+
+# Function to query the OSRSArchivedNewsArticles MongoDB collection for all OSRS news articles for the current month
+def getOSRSCurrentMonthArticles(currentMonth, currentYear):
+    currentMonthArticles = mongoDBRequests.readOSRSSpecificMonthArticles("Consolidate", "OSRSArchivedNewsArticles", currentMonth, currentYear) 
+    return currentMonthArticles
     
 # Global declarations (declared in each process)
 today = date.today()
@@ -171,8 +181,10 @@ currentMonth = date.today().month
 # Grab all news articles from the OSRS website published from the past 2 years
 if __name__ == '__main__':
     print("Grabbing main page articles...")
-    #mainPageArticles = getOSRSMainPageNewsArticles()
-    # syncOSRSMainPageArticles(mainPageArticles)
-    getOSRSCurrentMonthArticles(currentYear, currentMonth)
-    #getOSRSSpecificMonthArticles(currentYear, currentMonth)
+    scrapeOSRSMainPageNewsArticles()
+    # scrapeOSRSCurrentMonthArticles(currentMonth, currentYear)
+    # print("================= GET MAIN PAGE ARTICLES =================")
+    # print(getOSRSMainPageArticles())
+    # print("================= GET CURRENT MONTH ARTICLES =================")
+    # print(getOSRSCurrentMonthArticles(currentMonth, currentYear))
     

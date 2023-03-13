@@ -7,15 +7,19 @@ from bson.objectid import ObjectId
 load_dotenv(find_dotenv()) # Automatically find and load .env file
 
 # MongoDB Cluster connection definition for "Personal" cluster
-mongoDB_Personal_UserName = os.environ.get("MONGODB_USER")
-mongoDB_Personal_Password = urllib.parse.quote_plus(os.environ.get("MONGODB_PWD"))
-mongodb_Personal_ConnectionString = f"mongodb+srv://{mongoDB_Personal_UserName}:{mongoDB_Personal_Password}@personal.31iindg.mongodb.net/?retryWrites=true&w=majority"
-client = MongoClient(mongodb_Personal_ConnectionString)
+mongoDBPersonalUserNameRW = os.environ.get("MONGODB_USER")
+mongoDBPersonalPasswordRW = urllib.parse.quote_plus(os.environ.get("MONGODB_PWD"))
+mongodbPersonalConnectionStringRW = f"mongodb+srv://{mongoDBPersonalUserNameRW}:{mongoDBPersonalPasswordRW}@personal.31iindg.mongodb.net/?retryWrites=true&w=majority"
+mongoDBPersonalUserNameR = os.environ.get("MONGODB_READ_USER")
+mongoDBPersonalPasswordR = urllib.parse.quote_plus(os.environ.get("MONGODB_READ_PWD"))
+mongodbPersonalConnectionStringR = f"mongodb+srv://{mongoDBPersonalUserNameR}:{mongoDBPersonalPasswordR}@personal.31iindg.mongodb.net/?retryWrites=true&w=majority"
+clientReadWrite = MongoClient(mongodbPersonalConnectionStringRW)
+clientRead = MongoClient(mongodbPersonalConnectionStringR)
 
 
 # Function to insert a single record into a given Database's Collection
 def insertSingleRecord(databaseName, collectionName, document):
-    collection = client[databaseName][collectionName]
+    collection = clientReadWrite[databaseName][collectionName]
 
     try:
         recordID = collection.insert_one(document).inserted_id
@@ -26,7 +30,7 @@ def insertSingleRecord(databaseName, collectionName, document):
     
 # Function to delete a single record from a given Database's Collection
 def deleteSingleRecord(databaseName, collectionName, documentID):
-    collection = client[databaseName][collectionName]
+    collection = clientReadWrite[databaseName][collectionName]
 
     try:
         collection.delete_one({"_id": ObjectId(documentID)})
@@ -36,8 +40,8 @@ def deleteSingleRecord(databaseName, collectionName, documentID):
     
     
 # Function to specifically query the database for any OSRSNewsArticles with the articleClass = "mainPage"
-def findOSRSNewsMainPageArticles(databaseName, collectionName):
-    collection = client[databaseName][collectionName]
+def readOSRSNewsMainPageArticles(databaseName, collectionName):
+    collection = clientRead[databaseName][collectionName]
     returnArticles = []
     
     mainPageArticles = collection.find({"articleClass":"mainPage"})
@@ -47,8 +51,8 @@ def findOSRSNewsMainPageArticles(databaseName, collectionName):
     
     return returnArticles
 
-def findOSRSSpecificMonthArticles(databaseName, collectionName, currentMonth, currentYear):
-    collection = client[databaseName][collectionName]
+def readOSRSSpecificMonthArticles(databaseName, collectionName, currentMonth, currentYear):
+    collection = clientRead[databaseName][collectionName]
     returnArticles = []
     
     currentMonthArticles = collection.find({"$and":[
@@ -61,5 +65,3 @@ def findOSRSSpecificMonthArticles(databaseName, collectionName, currentMonth, cu
     
     return returnArticles
     
-
-#findOSRSNewsMainPageArticles("Consolidate", "OSRSNewsArticles")
