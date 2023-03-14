@@ -13,6 +13,7 @@ import mongoDBRequests
 import json
 import time
 from dataclasses import dataclass
+import sys
 
 # DataClass that defines all notable elements of an OSRS News Article
 @dataclass
@@ -180,9 +181,15 @@ currentMonth = date.today().month
 
 # Grab all news articles from the OSRS website published from the past 2 years
 if __name__ == '__main__':
-    print("Grabbing main page articles...")
-    scrapeOSRSMainPageNewsArticles()
-    # scrapeOSRSCurrentMonthArticles(currentMonth, currentYear)
+    if(sys.argv[1] == "mainPageArticles"):
+        print("Grabbing main page articles...")
+        scrapeOSRSMainPageNewsArticles()
+    elif(sys.argv[1] == "currentMonthArticles"):
+        print("current month")
+        scrapeOSRSCurrentMonthArticles(currentMonth, currentYear)
+    else:
+        print("NOTHING")
+        
     # print("================= GET MAIN PAGE ARTICLES =================")
     # print(getOSRSMainPageArticles())
     # print("================= GET CURRENT MONTH ARTICLES =================")

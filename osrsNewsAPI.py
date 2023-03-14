@@ -1,10 +1,23 @@
 #fastAPI here
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from dataclasses import dataclass
 import mongoDBRequests
 import osrsNewsCore
 
 app = FastAPI()
+# origins = [
+#     "http://www.jdfordjr.com",
+#     "http://jdfordjr.com",
+#     "https://www.jdfordjr.com",
+#     "https://jdfordjr.com"
+# ]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @dataclass
 class osrsNewsArticle:
